@@ -1,8 +1,9 @@
-# Price, OPSD, when2heat and BDEW URLs verified 2026-10-18 (DECISIONS.md items 1-5). Context filters unchecked.
+# Price, OPSD, when2heat and BDEW URLs verified 2026-10-18 (DECISIONS.md items 1-5).
 smard_base: https://www.smard.de/app/chart_data
 smard_region: DE-LU
 smard_price_filter: 4169            # day-ahead price DE-LU, EUR/MWh
-smard_context_filters: [410, 4068, 4067]   # optional context series (not yet checked, Phase 1 optional)
+smard_context_region: DE            # verified: index_quarterhour.json returns 200 under DE for all three
+smard_context_filters: [410, 4068, 4067]   # optional context series (grid load, solar, wind)
 smard_resolution: quarterhour
 
 opsd_household_15min_url: https://data.open-power-system-data.org/household_data/2020-04-15/household_data_15min_singleindex.csv

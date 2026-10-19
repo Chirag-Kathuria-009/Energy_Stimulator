@@ -180,6 +180,7 @@ class SourcesCfg(_Strict):
     smard_base: str
     smard_region: str
     smard_price_filter: int
+    smard_context_region: str  # context series (load, solar, wind) exist for DE, not DE-LU
     smard_context_filters: list[int]
     smard_resolution: str
     opsd_household_15min_url: str

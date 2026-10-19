@@ -8,7 +8,7 @@ Items marked **OPEN** need a decision or caveat in a later phase.
 ### 1. SMARD URL pattern, region, filter 4169
 - **Checked:** fetched the index and chunks with curl.
 - **Found:** pattern is correct. Index: `https://www.smard.de/app/chart_data/4169/DE-LU/index_quarterhour.json` returns `{"timestamps": [ms, ...]}` (key name `timestamps`, 420 entries, one per week, 2018-09-30T22:00Z to 2026-10-11T22:00Z). Chunk: `.../4169/DE-LU/4169_DE-LU_quarterhour_{ts}.json` returns `series: [[ts_ms, value], ...]`, 672 rows per week (more or fewer on DST weeks: one week has 169 hours). Values are EUR/MWh (e.g. 161.27 on 2026-10-04). Filter 4169 with region `DE-LU` is the day-ahead price. No auth, no bund.dev proxy needed.
-- **Not yet checked:** context filters 410, 4068, 4067 (optional series, Phase 1).
+- **Context series (checked 2026-10-19):** filters 410, 4068, 4067 return an index under region `DE` (HTTP 200), not `DE-LU`. Config has a separate `smard_context_region`. Their meaning (grid load, solar, wind) is taken from the plan and not cross-checked against the values.
 - URL: https://www.smard.de/app/chart_data/4169/DE-LU/index_quarterhour.json
 
 ### 2. SMARD dates before 1 October 2025 at `quarterhour` resolution
