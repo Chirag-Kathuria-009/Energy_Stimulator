@@ -42,7 +42,8 @@ def test_vat_out_of_range_fails(raw):
 
 def test_overlapping_module3_windows_fail(raw):
     raw = copy.deepcopy(raw)
-    raw["grid_14a"]["module3"]["windows_local_time"]["high"].append("18:00-19:30")  # overlaps standard
+    # 18:00-19:30 overlaps the standard window 17:00-19:00
+    raw["grid_14a"]["module3"]["windows_local_time"]["high"].append("18:00-19:30")
     with pytest.raises(ValidationError, match="overlap"):
         AppConfig.model_validate(raw)
 

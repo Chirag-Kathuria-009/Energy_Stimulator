@@ -121,7 +121,9 @@ class Module3Cfg(_Strict):
                     seen[q] = name
         missing = sorted(set(range(QH_PER_DAY)) - set(seen))
         if missing:
-            raise ValueError(f"Module 3 windows leave {len(missing)} quarter-hours uncovered: {missing[:5]}...")
+            raise ValueError(
+                f"Module 3 windows leave {len(missing)} quarter-hours uncovered: {missing[:5]}..."
+            )
         return self
 
     def window_by_qh(self) -> list[str]:
@@ -218,7 +220,10 @@ _FILES = {
 
 def load_raw(path: Path = CONFIG_DIR) -> dict:
     """Read the YAML files into one dict, unvalidated."""
-    return {key: yaml.safe_load((path / name).read_text(encoding="utf-8")) for key, name in _FILES.items()}
+    return {
+        key: yaml.safe_load((path / name).read_text(encoding="utf-8"))
+        for key, name in _FILES.items()
+    }
 
 
 def load_config(path: Path = CONFIG_DIR) -> AppConfig:

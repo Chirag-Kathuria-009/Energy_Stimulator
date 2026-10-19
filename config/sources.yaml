@@ -1,4 +1,4 @@
-# All URLs verified 2026-10-18 (DECISIONS.md items 1-5).
+# Price, OPSD, when2heat and BDEW URLs verified 2026-10-18 (DECISIONS.md items 1-5). Context filters unchecked.
 smard_base: https://www.smard.de/app/chart_data
 smard_region: DE-LU
 smard_price_filter: 4169            # day-ahead price DE-LU, EUR/MWh
