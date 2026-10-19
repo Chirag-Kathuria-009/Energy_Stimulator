@@ -1,7 +1,52 @@
 [project]
-name = "energy-stimulator"
+name = "energy-tariff-simulator"
 version = "0.1.0"
-description = "Add your description here"
+description = "Dynamic tariff and §14a EnWG simulator for German households (quarter-hour prices)"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "httpx",
+    "tenacity",
+    "polars",
+    "pyarrow",
+    "duckdb",
+    "dbt-core",
+    "dbt-duckdb",
+    "pydantic>=2",
+    "pyyaml",
+    "holidays",
+    "numpy",
+    "pulp",
+    "highspy",
+    "typer",
+    "streamlit",
+    "plotly",
+    "pandera[polars]",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[project.scripts]
+ets = "ets.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ets"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

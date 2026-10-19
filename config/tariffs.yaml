@@ -1,0 +1,25 @@
+# Supplier terms are shared by all dynamic variants (deviation from the plan's flat list,
+# see DECISIONS.md). Variants only differ in the §14a module.
+supplier:
+  name: Tibber (Smart Dynamic)         # ASSUMPTION: secondary source, see DECISIONS.md #8
+  markup_ct_kwh: 1.81                  # 2.15 ct gross / 1.19 -> net; VAT is re-added in billing
+  base_fee_eur_month: 5.99             # gross
+  smart_meter_fee_eur_year: 40.0       # gross; MsbG cap for a smart meter, 6,000-10,000 kWh band (DECISIONS.md #7)
+
+variants:
+  - id: fixed
+    type: fixed
+  - id: dynamic
+    type: dynamic
+  - id: dynamic_m1
+    type: dynamic
+    grid14a_module: 1
+  - id: dynamic_m2
+    type: dynamic
+    grid14a_module: 2
+  - id: dynamic_m3
+    type: dynamic
+    grid14a_module: 3
+  - id: dynamic_m1_m3
+    type: dynamic
+    grid14a_module: [1, 3]

@@ -1,0 +1,15 @@
+# GELSENWASSER Energienetze GmbH, Preisblatt Netznutzungsentgelte Strom, valid from 2026-01-01
+# (Stand 18.12.2025), section 3 "Netznutzungsentgelte nach §14a". All amounts NET of VAT.
+grid_operator: GELSENWASSER Energienetze GmbH
+source_url: https://www.gw-energienetze.de/fileadmin/gw-energienetze/30_marktpartner/30.2_netznutzungsentgelte/preisblatt_gwn_strom_2026.pdf
+module1_credit_eur_year_net: 137.95    # annual grid-fee reduction; gross = x 1.19 (computed in config.py)
+module2_reduction_factor: 0.40         # Preisblatt: 3.77 ct vs 9.43 ct standard = 0.3998
+module3:
+  # Same windows in all four quarters per the Preisblatt (page 6, read from the rendered table;
+  # the 14a-atlas.de comparison page lists them wrongly). Wrap past midnight is allowed.
+  windows_local_time:
+    high: ["07:00-08:00", "19:00-22:00"]
+    standard: ["22:00-01:30", "04:30-07:00", "08:00-10:00", "17:00-19:00"]
+    low: ["01:30-04:30", "10:00-17:00"]
+  grid_fee_ct_kwh: {high: 18.71, standard: 9.43, low: 3.77}   # net
+dimming_floor_kw: 4.2

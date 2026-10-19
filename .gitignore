@@ -5,8 +5,18 @@ build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache/
+.ruff_cache/
 
 # Virtual environments
 .venv
+
+# Data: everything except the small CI fixtures
+data/*
+!data/sample/
+dbt/target/
+dbt/logs/
+
+# Local planning docs (kept out of the repo on purpose)
 ENERGY_SIMULATOR_PLAN.md
 IMPLEMENTATION_PHASES.md

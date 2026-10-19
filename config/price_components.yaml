@@ -1,0 +1,11 @@
+# BDEW Strompreisanalyse 08/2026, household 3,500 kWh/year. Net ct/kWh unless stated.
+# Source: https://www.bdew.de/media/documents/BDEW_Strompreisanalyse_082026.pdf
+year: 2026
+fixed_tariff_gross_ct_kwh: 37.0        # all-in average incl. base fee share
+grid_fee_ct_kwh: 9.24                  # BDEW average. Chosen operator's own value is 9.43 (see DECISIONS.md #6)
+concession_ct_kwh: 1.666
+offshore_levy_ct_kwh: 0.941
+s19_levy_ct_kwh: 1.559
+kwkg_levy_ct_kwh: 0.446
+electricity_tax_ct_kwh: 2.050
+vat_rate: 0.19

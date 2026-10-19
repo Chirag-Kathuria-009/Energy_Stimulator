@@ -1,0 +1,29 @@
+# All ASSUMPTIONS unless noted; reasoning in DECISIONS.md.
+- id: A_standard
+  annual_kwh: 3500
+
+- id: B_ev
+  annual_kwh: 3500
+  ev: &ev
+    km_per_year: 15000
+    kwh_per_100km: 17
+    battery_kwh: 60
+    wallbox_kw: 11
+    plug_in_weekday: "18:00"
+    plug_out_weekday: "07:00"
+
+- id: C_heat_pump
+  annual_kwh: 3500
+  heat_pump: &hp
+    annual_heat_kwh: 15000
+    p_max_kw: 6
+    thermal_buffer_kwh: 10
+
+- id: D_full
+  annual_kwh: 3500
+  ev: *ev
+  heat_pump: *hp
+  pv:
+    kwp: 8
+    specific_yield_kwh_per_kwp: 950    # typical German yield, ASSUMPTION; refine in Phase 3
+    feed_in_ct_kwh: 7.78               # EEG partial feed-in <=10 kWp, Feb-Jul 2026 (DECISIONS.md)

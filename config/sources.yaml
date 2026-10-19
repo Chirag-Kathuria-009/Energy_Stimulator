@@ -1,0 +1,25 @@
+# All URLs verified 2026-10-18 (DECISIONS.md items 1-5).
+smard_base: https://www.smard.de/app/chart_data
+smard_region: DE-LU
+smard_price_filter: 4169            # day-ahead price DE-LU, EUR/MWh
+smard_context_filters: [410, 4068, 4067]   # optional context series (not yet checked, Phase 1 optional)
+smard_resolution: quarterhour
+
+opsd_household_15min_url: https://data.open-power-system-data.org/household_data/2020-04-15/household_data_15min_singleindex.csv
+# Values are cumulative kWh meter readings; see DECISIONS.md #3 for covered ranges.
+opsd_channels:
+  base_grid_import_r1: DE_KN_residential1_grid_import
+  hp_r1: DE_KN_residential1_heat_pump
+  pv_r1: DE_KN_residential1_pv
+  base_grid_import_r4: DE_KN_residential4_grid_import
+  hp_r4: DE_KN_residential4_heat_pump
+  ev_r4: DE_KN_residential4_ev
+  pv_r4: DE_KN_residential4_pv
+
+when2heat_url: https://data.open-power-system-data.org/when2heat/2023-07-27/when2heat.csv   # ~328 MB, ';' separated
+when2heat_columns:
+  heat_demand: DE_heat_demand_total   # MW, hourly
+  cop: DE_COP_ASHP_radiator           # ratio; air-source heat pump, radiator heating (ASSUMPTION)
+
+bdew_local_path: data/manual/bdew_slp_2025.xlsx
+bdew_download_url: https://www.bdew.de/media/documents/Kopie_von_Repr%C3%A4sentative_Profile_BDEW_H25_G25_L25_P25_S25_Ver%C3%B6ffentlichung.xlsx
