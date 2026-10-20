@@ -33,8 +33,45 @@ def check_config() -> None:
 
 @app.command()
 def ingest() -> None:
-    """Download all sources into data/bronze (Phase 1)."""
-    _not_yet("ingest", 1)
+    """Download all sources into data/bronze; exit 1 if any source or coverage check fails."""
+    from ets.ingest import bdew, manifest, opsd, smard, when2heat
+
+    try:
+        cfg = load_config()
+    except (ValidationError, FileNotFoundError, ValueError) as e:
+        typer.echo(f"Config invalid:\n{e}", err=True)
+        raise typer.Exit(1) from e
+
+    failures: list[str] = []
+
+    def step(name: str, fn):
+        typer.echo(f"[{name}] ...")
+        try:
+            result = fn()
+        except Exception as e:  # one failing source must not stop the others
+            failures.append(f"{name}: {e}")
+            typer.echo(f"[{name}] FAILED: {e}", err=True)
+            return
+        typer.echo(f"[{name}] ok")
+        return result
+
+    prices = step("smard", lambda: smard.ingest_smard(cfg))
+    if prices:
+        typer.echo(f"  {len(prices[0])} price chunks")
+        for w in prices[1]:
+            typer.echo(f"  warning: {w}", err=True)
+    step("opsd", lambda: opsd.download_household_data(cfg))
+    step("when2heat", lambda: when2heat.download_when2heat(cfg))
+    step("bdew", lambda: bdew.register_bdew_file(cfg))
+
+    for problem in manifest.check_coverage(cfg):
+        failures.append(f"coverage: {problem}")
+        typer.echo(f"[coverage] {problem}", err=True)
+
+    if failures:
+        typer.echo(f"\nIngest failed ({len(failures)} problem(s)).", err=True)
+        raise typer.Exit(1)
+    typer.echo("\nIngest OK. Manifest: data/bronze/_manifest.json")
 
 
 @app.command("seed-holidays")
