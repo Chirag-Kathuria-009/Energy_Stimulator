@@ -205,7 +205,9 @@ class SourcesCfg(_Strict):
     smard_resolution: str
     opsd_household_15min_url: str
     opsd_channels: dict[str, str]  # logical channel -> OPSD column
+    opsd_max_kwh_per_qh: Annotated[float, Field(gt=0)]
     when2heat_url: str
+    when2heat_season_start_year: Annotated[int, Field(ge=2008, le=2021)]  # complete seasons only
     when2heat_columns: dict[str, str]  # logical name -> column
     bdew_local_path: str
     bdew_download_url: str

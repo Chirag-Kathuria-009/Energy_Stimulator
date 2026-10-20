@@ -129,3 +129,30 @@ A week chunk at `quarterhour` and the same week at `hour` resolution (2025-08-31
 - **Result of the first full run:** 6 min 12 s; 108 price chunks (2024-09 to 2026-10, covering the simulation year with no gaps), 56 chunks each for 410, 4067, 4068; 276 SMARD files; manifest has 279 entries, 393 MB (377 MB on disk under `data/bronze`). Series 4068 starts later than the others (first chunk 2025-12-28), which does not matter while the series is unused.
 - **Idempotence:** a second run took 12.7 s and re-fetched exactly the four newest chunks (one per SMARD series); OPSD, when2heat and BDEW were skipped by checksum.
 - The meaning of the context filters (grid load, solar, wind) is still taken from the plan and not cross-checked against values.
+
+## Phase 2 (transform) notes, 2026-10-20
+
+### 19. Deviations from the plan, and why
+- **Bronze readers are macros (`dbt/macros/bronze.sql`), not `models/sources.yml`.** The `read_json(..., columns={...})` expressions contain braces that clash with dbt-duckdb's `external_location` string formatting; macros are also easy to point at temp files in tests.
+- **BDEW workbook is converted to a long CSV by Python** (`profiles/bdew_staging.py`, openpyxl, new dependency) into `data/staging/`, because DuckDB's Excel reader needs a network extension install. The bronze workbook is untouched.
+- **Dynamisation moved from silver to gold.** `silver_bdew_profiles_qh` is the raw month x day type x quarter-hour table (kWh per quarter-hour per 1,000,000 kWh/year); the factor depends on the date, so it is applied in `fact_load_profile_qh`, together with the day-type rule (Sunday/holiday FT; Saturday, 24 and 31 Dec SA) and the October repeated-hour split (each copy gets half). Result: each profile sums to exactly 1000 per 1000 kWh/year over the simulation year. Phase 3: `profile * annual_kwh / 1000`. The March day simply lacks the 02:00 hour (its daily energy is about 4% lower).
+- **`fact_heat_qh` columns:** `heat_space_norm, heat_water_norm, cop_space, cop_water` (each heat series sums to 1), not the plan's `heat_demand_norm, cop`, because the space/water split is a household parameter (`dhw_share`, Phase 3). Appendix B of the plan is out of date on this.
+- **Weather season (new config `when2heat_season_start_year: 2014`):** gold maps the simulation year onto when2heat's season Oct 2014 - Sep 2015 by local clock time (sim Oct-Dec -> Oct-Dec 2014, Jan-Sep -> Jan-Sep 2015) and re-normalises. 2014/15 was chosen because its monthly heat-demand shares are closest to the mean of the 14 complete seasons (RMSE 0.0092, lowest of 14; runner-up 2019/20 at 0.0097, so the choice is not sharp). The simulation does not use 2025/26 weather.
+- **OPSD shapes stay in silver.** `data/silver/silver_load_opsd_qh.parquet` (site, channel, ts_utc, kwh, is_estimated, date_local; complete local days only) is read by Phase 3 (`align_to_year`, EV/PV/HP shapes). There is no gold table for it. This is the one place where a later phase reads silver, not gold.
+- **`ets transform` is the only supported entry point for dbt.** It injects config as dbt vars (paths, simulation window, OPSD and when2heat column names, season year, `n_qh`) so there is one source of truth; direct `dbt build` only works for the scalar defaults in `dbt_project.yml`. dbt runs in a subprocess so the DuckDB file lock is released before the pandera checks open the database.
+- **Extra generic/singular tests beyond the plan:** `not_null` on gold prices and COP, `gold_row_counts` (N rows per fact, N per profile), `profile_sums` (load sums to 1000, heat sums to 1).
+
+### 20. Source quirks found while building (all handled)
+- DuckDB auto-detects the CSV timestamp column as `TIMESTAMPTZ`; both CSV readers force it to `VARCHAR` and parse with `strptime`.
+- when2heat has **one missing hour at each autumn DST change** (15 holes, 2008-2022). Without handling, gold `fact_heat_qh` had 8 null COP quarter-hours on 2025-10-26. `silver_heat_qh` now fills a single missing hour with the mean of its neighbours and flags `is_estimated` (15 hours); longer gaps would stay null and fail the `not_null` tests.
+- DuckDB/ICU resolves ambiguous local times (repeated October hour) to the second occurrence and non-existent spring times to an earlier hour; relevant only to the season mapping, where duplicates are absorbed by the re-normalisation.
+- OPSD silver (full local days only, gaps of up to 4 quarter-hours spread evenly): residential1 grid/heat pump/PV 661 days, residential4 grid/PV 848, EV 845, heat pump 512; every channel covers all 36 (month, day type) cells; no estimated rows were needed (P1 = P2, as in #15). Annualised from the kept days: r1 grid ~5,021 kWh, r1 heat pump ~5,638, r4 EV ~960, r4 PV ~10,578 kWh/yr.
+
+### 21. Validation of the output (not just green tests)
+- Gold row counts: `dim_time`, `fact_price_qh`, `fact_heat_qh` 35,040 each; `fact_load_profile_qh` 70,080 (35,040 per profile). Null prices: 0. Estimated prices: 0. All prices `source_resolution='qh'`.
+- Every one of the 35,040 prices equals the raw bronze value (0 mismatches). 2,052 negative quarter-hours and mean 104.045 EUR/MWh, identical to the scratch experiment in #13.
+- DST days: 2025-10-26 has 100 quarter-hours, 2026-03-29 has 92; 9 national holidays fall in the simulation year.
+- Load-weighted spot price with the gold H25 profile: 10.4701 ct/kWh (scratch experiment 10.469; the 0.001 difference is the October repeated-hour split), time average 10.4045.
+- H25 shape: 12.9% of energy before 05:00 local, 23.7% between 17:00 and 21:00; July noon P25 is 5.3 vs H25 28.3 per 1000 kWh (PV effect), consistent with #5.
+- Heat: space-heat shares by month peak in December (17.2%) and fall to 0.7% in August; space COP 2.09-4.06 (mean 3.50), water COP 1.94-4.00, inside the 1-8 check.
+- Timings: `ets transform` about 33 s (silver heat 18 s dominates). 72 tests, ruff clean.

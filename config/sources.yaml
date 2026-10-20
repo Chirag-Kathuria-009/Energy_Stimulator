@@ -21,11 +21,18 @@ opsd_channels:
 # DE_heat_demand_* are empty from 2016 on, so the single-family-house *profile* columns are used
 # (complete for all years, each sums to ~1,000,000 per year). DECISIONS.md #4.
 when2heat_url: https://data.open-power-system-data.org/when2heat/2023-07-27/when2heat.csv
+# Weather season mapped onto the simulation year: simulation Oct-Dec uses Oct-Dec of this year,
+# Jan-Sep uses Jan-Sep of the next one. 2014/15 has the monthly heat-demand shares closest to the
+# mean of the 14 complete seasons 2008/09-2021/22 (RMSE 0.0092, lowest). DECISIONS.md #19.
+when2heat_season_start_year: 2014
 when2heat_columns:
   heat_profile_space: DE_heat_profile_space_SFH
   heat_profile_water: DE_heat_profile_water_SFH
   cop_space: DE_COP_ASHP_radiator     # air-source heat pump, radiator heating (ASSUMPTION)
   cop_water: DE_COP_ASHP_water
+
+# Meter increments above this per quarter-hour are treated as meter errors (about 40 kW for 15 min).
+opsd_max_kwh_per_qh: 10.0
 
 bdew_local_path: data/manual/bdew_slp_2025.xlsx
 bdew_download_url: https://www.bdew.de/media/documents/Kopie_von_Repr%C3%A4sentative_Profile_BDEW_H25_G25_L25_P25_S25_Ver%C3%B6ffentlichung.xlsx

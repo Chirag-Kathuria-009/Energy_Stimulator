@@ -1,0 +1,37 @@
+name: ets
+version: "0.1.0"
+config-version: 2
+profile: ets
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+# Defaults let `dbt` run on its own; `ets transform` overrides all of them from config/*.yaml
+# and settings.py (single source of truth), including the dict-valued vars it requires:
+# opsd_channels, opsd_max_kwh_per_qh, when2heat_columns, when2heat_season_start_year.
+vars:
+  bronze_dir: ../data/bronze
+  staging_dir: ../data/staging
+  smard_price_filter: 4169
+  smard_resolution: quarterhour
+  sim_start_utc: "2025-09-30 22:00:00"   # local midnight 2025-10-01, as naive UTC
+  sim_end_utc: "2026-09-30 22:00:00"     # exclusive
+  qh_start_utc: "2025-09-30 22:00:00"    # SMARD true 15-minute prices start 2025-10-01 local
+  n_qh: 35040
+
+seeds:
+  ets:
+    holidays_de:
+      +column_types:
+        date: date
+        name: varchar
+
+models:
+  ets:
+    silver:
+      +materialized: external
+      +format: parquet
+    gold:
+      +materialized: table

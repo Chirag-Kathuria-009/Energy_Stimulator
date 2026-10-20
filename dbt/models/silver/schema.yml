@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: silver_price_qh
+    description: Day-ahead price DE-LU per quarter-hour (UTC), ct/kWh. Hourly values repeated before 2025-10-01.
+    columns:
+      - name: ts_utc
+        tests: [unique, not_null]
+      - name: source_resolution
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['qh', 'h']
+      - name: is_estimated
+        tests: [not_null]
+
+  - name: silver_load_opsd_qh
+    description: OPSD household meters as kWh per quarter-hour, complete local days only.
+    columns:
+      - name: ts_utc
+        tests: [not_null]
+      - name: kwh
+        tests: [not_null]
+
+  - name: silver_bdew_profiles_qh
+    description: BDEW H25/P25 by month, day type and quarter-hour (kWh per quarter-hour per 1,000,000 kWh/year).
+    columns:
+      - name: profile_id
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['H25', 'P25']
+      - name: daytype
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['SA', 'FT', 'WT']
+
+  - name: silver_heat_qh
+    description: when2heat DE single-family-house heat profiles and COP, hourly source expanded to quarter-hours.
+    columns:
+      - name: ts_utc
+        tests: [unique, not_null]
+      - name: cop_space
+        tests: [not_null]
+      - name: cop_water
+        tests: [not_null]

@@ -1,0 +1,8 @@
+ets:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ../data/gold/energy.duckdb   # relative to the dbt directory (ets transform runs there)
+      external_root: ../data/silver      # silver models are written here as Parquet
+      threads: 4

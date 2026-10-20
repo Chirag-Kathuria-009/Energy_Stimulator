@@ -16,6 +16,7 @@ data/*
 !data/sample/
 dbt/target/
 dbt/logs/
+dbt/.user.yml
 
 # Local planning docs (kept out of the repo on purpose)
 ENERGY_SIMULATOR_PLAN.md

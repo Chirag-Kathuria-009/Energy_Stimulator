@@ -1,0 +1,61 @@
+version: 2
+
+models:
+  - name: dim_time
+    description: One row per quarter-hour of the simulation year (UTC grid, local calendar attributes).
+    columns:
+      - name: idx
+        tests: [unique, not_null]
+      - name: ts_utc
+        tests: [unique, not_null]
+      - name: date_local
+        tests: [qh_per_local_day]
+
+  - name: fact_price_qh
+    columns:
+      - name: idx
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_time')
+                field: idx
+      - name: ts_utc
+        tests: [unique, not_null]
+      - name: price_ct_kwh
+        tests: [not_null]
+      - name: source_resolution
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['qh', 'h']
+
+  - name: fact_load_profile_qh
+    columns:
+      - name: idx
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_time')
+                field: idx
+      - name: kwh
+        tests: [not_null]
+
+  - name: fact_heat_qh
+    columns:
+      - name: idx
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_time')
+                field: idx
+      - name: ts_utc
+        tests: [unique, not_null]
+      - name: cop_space
+        tests: [not_null]
+      - name: cop_water
+        tests: [not_null]

@@ -76,14 +76,34 @@ def ingest() -> None:
 
 @app.command("seed-holidays")
 def seed_holidays() -> None:
-    """Write dbt/seeds/holidays_de.csv (Phase 2)."""
-    _not_yet("seed-holidays", 2)
+    """Write dbt/seeds/holidays_de.csv with national German holidays of the simulation years."""
+    from ets.profiles.calendar import write_holiday_seed
+
+    path = write_holiday_seed(SIM_START.year, SIM_END.year)
+    typer.echo(f"Wrote {path}")
 
 
 @app.command()
 def transform() -> None:
-    """Run dbt build and gold quality checks (Phase 2)."""
-    _not_yet("transform", 2)
+    """Stage BDEW, run dbt build (seed, models, tests), then gold checks; exit 1 on any failure."""
+    import subprocess
+
+    from ets.transform import transform as run_transform
+
+    try:
+        cfg = load_config()
+        problems = run_transform(cfg)
+    except (ValidationError, FileNotFoundError, ValueError) as e:
+        typer.echo(f"Config invalid:\n{e}", err=True)
+        raise typer.Exit(1) from e
+    except subprocess.CalledProcessError as e:
+        typer.echo(f"dbt build failed (exit {e.returncode}); see output above.", err=True)
+        raise typer.Exit(1) from e
+    if problems:
+        for p in problems:
+            typer.echo(f"[gold check] {p}", err=True)
+        raise typer.Exit(1)
+    typer.echo("Transform OK: dbt build green, gold checks passed.")
 
 
 @app.command()
