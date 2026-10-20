@@ -118,3 +118,14 @@ A week chunk at `quarterhour` and the same week at `hour` resolution (2025-08-31
 ### 17. Not changed
 - Supplier choice stays Tibber with assumed-gross figures (#8), pending primary figures.
 - `dynamic_m3` stays as Module 3 alone, next to `dynamic_m1_m3`.
+
+## Phase 1 (ingest) notes, 2026-10-20
+
+### 18. Deviations and results
+- **Chunk skip rule is stricter than the plan's.** The plan skips any existing chunk except the newest. A chunk first downloaded while it was the newest week can hold null future slots, so it would stay stale forever. A chunk is skipped only if its manifest `fetched_at_utc` is after the chunk's end (`chunk_end_ms` stored in `extra`). Covered by `test_fetch_range_refetches_chunk_that_was_fetched_before_its_week_ended`.
+- **`save_bronze` takes raw bytes**, not a parsed dict, so bronze is byte-identical to what SMARD sent. `fetch_chunk` returns bytes for the same reason.
+- **Context series are optional.** A failure of 410/4068/4067 is a warning; a failure of the price series or any other source fails `ets ingest` (exit 1). Coverage is checked on real values: every quarter-hour of the simulation year must have a non-null price in the bronze files (35,040 slots), not just a chunk-count check.
+- **BDEW file is downloaded automatically** from the direct URL into `data/manual/bdew_slp_2025.xlsx` when absent; the manual-download error message is only the fallback.
+- **Result of the first full run:** 6 min 12 s; 108 price chunks (2024-09 to 2026-10, covering the simulation year with no gaps), 56 chunks each for 410, 4067, 4068; 276 SMARD files; manifest has 279 entries, 393 MB (377 MB on disk under `data/bronze`). Series 4068 starts later than the others (first chunk 2025-12-28), which does not matter while the series is unused.
+- **Idempotence:** a second run took 12.7 s and re-fetched exactly the four newest chunks (one per SMARD series); OPSD, when2heat and BDEW were skipped by checksum.
+- The meaning of the context filters (grid load, solar, wind) is still taken from the plan and not cross-checked against values.
