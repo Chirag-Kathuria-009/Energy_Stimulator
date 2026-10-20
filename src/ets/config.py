@@ -25,7 +25,7 @@ class _Strict(BaseModel):
 
 class PriceComponents(_Strict):
     year: int
-    fixed_tariff_gross_ct_kwh: CtKwh
+    energy_ct_kwh: CtKwh  # BDEW "energy purchase and sales" line, replaced by spot + markup
     grid_fee_ct_kwh: CtKwh
     concession_ct_kwh: CtKwh
     offshore_levy_ct_kwh: CtKwh
@@ -34,6 +34,24 @@ class PriceComponents(_Strict):
     electricity_tax_ct_kwh: CtKwh
     vat_rate: Annotated[float, Field(ge=0, le=0.3)]
 
+    @property
+    def non_energy_net_ct_kwh(self) -> float:
+        """Everything except the energy line, net of VAT (the part a dynamic tariff keeps)."""
+        return (
+            self.grid_fee_ct_kwh
+            + self.concession_ct_kwh
+            + self.offshore_levy_ct_kwh
+            + self.s19_levy_ct_kwh
+            + self.kwkg_levy_ct_kwh
+            + self.electricity_tax_ct_kwh
+        )
+
+    @property
+    def fixed_tariff_gross_ct_kwh(self) -> float:
+        """All-in fixed price rebuilt from the components, so the benchmark uses the same grid
+        fee as the dynamic variants (BDEW's 9.24 ct gives 36.98 ct; 9.43 ct gives 37.20 ct)."""
+        return (self.energy_ct_kwh + self.non_energy_net_ct_kwh) * (1 + self.vat_rate)
+
 
 class SupplierCfg(_Strict):
     """Dynamic-tariff supplier terms, shared by every dynamic variant."""
@@ -41,7 +59,6 @@ class SupplierCfg(_Strict):
     name: str
     markup_ct_kwh: CtKwh  # net of VAT; VAT is added in billing
     base_fee_eur_month: Annotated[float, Field(ge=0, le=50)]  # gross, added after VAT
-    smart_meter_fee_eur_year: Annotated[float, Field(ge=0, le=300)]  # gross
 
 
 class TariffCfg(_Strict):
@@ -158,6 +175,7 @@ class EVCfg(_Strict):
 
 class HeatPumpCfg(_Strict):
     annual_heat_kwh: Annotated[float, Field(gt=0)]
+    dhw_share: Annotated[float, Field(ge=0, le=0.5)]  # hot-water share of the heat demand
     p_max_kw: Annotated[float, Field(gt=0)]
     thermal_buffer_kwh: Annotated[float, Field(gt=0)]
 
@@ -171,6 +189,8 @@ class PVCfg(_Strict):
 class HouseholdCfg(_Strict):
     id: str
     annual_kwh: Annotated[float, Field(gt=0)]
+    # Household's share of the MsbG §30 smart-meter price cap, gross, paid on dynamic variants.
+    smart_meter_fee_eur_year: Annotated[float, Field(ge=0, le=300)]
     ev: EVCfg | None = None
     heat_pump: HeatPumpCfg | None = None
     pv: PVCfg | None = None

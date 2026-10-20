@@ -1,8 +1,10 @@
 # BDEW Strompreisanalyse 08/2026, household 3,500 kWh/year. Net ct/kWh unless stated.
 # Source: https://www.bdew.de/media/documents/BDEW_Strompreisanalyse_082026.pdf
+# The all-in fixed price is rebuilt from these lines (see config.py): with grid fee 9.24 it gives
+# BDEW's 37.0 ct (36.98); with this operator's 9.43 it gives 37.20 ct. DECISIONS.md #13.
 year: 2026
-fixed_tariff_gross_ct_kwh: 37.0        # all-in average incl. base fee share
-grid_fee_ct_kwh: 9.24                  # BDEW average. Chosen operator's own value is 9.43 (see DECISIONS.md #6)
+energy_ct_kwh: 15.17                   # energy purchase and sales: replaced by spot + markup in dynamic tariffs
+grid_fee_ct_kwh: 9.43                  # GELSENWASSER NS Arbeitspreis 2026 (BDEW national average: 9.24)
 concession_ct_kwh: 1.666
 offshore_levy_ct_kwh: 0.941
 s19_levy_ct_kwh: 1.559

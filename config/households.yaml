@@ -1,9 +1,13 @@
 # All ASSUMPTIONS unless noted; reasoning in DECISIONS.md.
+# smart_meter_fee_eur_year: household share of the MsbG §30 cap, gross (DECISIONS.md #7):
+#   A: voluntary installation, §30(3) -> 30 EUR.  B/C/D: §14a controllable device -> 50 EUR.
 - id: A_standard
   annual_kwh: 3500
+  smart_meter_fee_eur_year: 30
 
 - id: B_ev
   annual_kwh: 3500
+  smart_meter_fee_eur_year: 50
   ev: &ev
     km_per_year: 15000
     kwh_per_100km: 17
@@ -14,16 +18,19 @@
 
 - id: C_heat_pump
   annual_kwh: 3500
+  smart_meter_fee_eur_year: 50
   heat_pump: &hp
     annual_heat_kwh: 15000
+    dhw_share: 0.165                   # SFH hot-water share of heat, when2heat 2015 (DECISIONS.md #4)
     p_max_kw: 6
     thermal_buffer_kwh: 10
 
 - id: D_full
   annual_kwh: 3500
+  smart_meter_fee_eur_year: 50
   ev: *ev
   heat_pump: *hp
   pv:
     kwp: 8
-    specific_yield_kwh_per_kwp: 950    # typical German yield, ASSUMPTION; refine in Phase 3
+    specific_yield_kwh_per_kwp: 950    # typical German yield, ASSUMPTION; shape from OPSD pv channels
     feed_in_ct_kwh: 7.78               # EEG partial feed-in <=10 kWp, Feb-Jul 2026 (DECISIONS.md)

@@ -21,6 +21,33 @@ def test_valid_config_loads():
     assert len(config_hash(cfg)) == 64
 
 
+def test_fixed_tariff_is_rebuilt_from_components(raw):
+    pc = load_config().price_components
+    assert pc.fixed_tariff_gross_ct_kwh == pytest.approx(37.20, abs=0.01)
+    # With BDEW's national-average grid fee the same formula reproduces BDEW's 37.0 ct.
+    raw["price_components"]["grid_fee_ct_kwh"] = 9.24
+    bdew = AppConfig.model_validate(raw).price_components
+    assert bdew.fixed_tariff_gross_ct_kwh == pytest.approx(37.0, abs=0.03)
+
+
+def test_module2_factor_matches_published_grid_fee():
+    cfg = load_config()
+    published_m2 = 3.77  # Preisblatt Modul 2 Arbeitspreis, ct/kWh net
+    derived = cfg.price_components.grid_fee_ct_kwh * cfg.grid_14a.module2_reduction_factor
+    assert derived == pytest.approx(published_m2, abs=0.01)
+
+
+def test_smart_meter_fee_is_per_household():
+    fees = {h.id: h.smart_meter_fee_eur_year for h in load_config().households}
+    assert fees == {"A_standard": 30, "B_ev": 50, "C_heat_pump": 50, "D_full": 50}
+
+
+def test_missing_household_meter_fee_fails(raw):
+    del raw["households"][0]["smart_meter_fee_eur_year"]
+    with pytest.raises(ValidationError, match="smart_meter_fee_eur_year"):
+        AppConfig.model_validate(raw)
+
+
 def test_module3_windows_expand_to_full_day():
     windows = load_config().grid_14a.module3.window_by_qh()
     assert len(windows) == 96 and "" not in windows
