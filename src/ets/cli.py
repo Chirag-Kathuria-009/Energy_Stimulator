@@ -107,6 +107,45 @@ def transform() -> None:
 
 
 @app.command()
+def households() -> None:
+    """Build the household archetypes from the gold tables and write dim_household (Phase 3)."""
+    import duckdb
+
+    from ets.profiles.archetypes import household_totals
+    from ets.settings import GOLD_DB
+    from ets.simulate.context import load_gold_context
+    from ets.simulate.run import build_households, write_dim_household
+
+    try:
+        cfg = load_config()
+    except (ValidationError, FileNotFoundError, ValueError) as e:
+        typer.echo(f"Config invalid:\n{e}", err=True)
+        raise typer.Exit(1) from e
+    if not GOLD_DB.exists():
+        typer.echo(f"{GOLD_DB} missing: run `ets transform` first.", err=True)
+        raise typer.Exit(1)
+    con = duckdb.connect(str(GOLD_DB))
+    try:
+        ctx = load_gold_context(con)
+        built = build_households(cfg, ctx)
+        write_dim_household(con, cfg, built)
+    except (ValueError, duckdb.Error) as e:
+        typer.echo(f"Building households failed: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        con.close()
+    for hh in built:
+        t = household_totals(hh)
+        typer.echo(
+            f"{hh.id:12} base {t['base_kwh']:7.0f}  ev {t['ev_kwh']:6.0f}  "
+            f"hp {t['hp_el_kwh']:6.0f} "
+            f"(heat {t['hp_heat_kwh']:6.0f}, COP {t['hp_seasonal_cop']:.2f})  "
+            f"pv {t['pv_kwh']:6.0f} kWh/yr"
+        )
+    typer.echo("dim_household written.")
+
+
+@app.command()
 def simulate() -> None:
     """Build households, bill tariffs, shift load (Phases 3-5)."""
     _not_yet("simulate", 3)
