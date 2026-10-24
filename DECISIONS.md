@@ -174,3 +174,33 @@ A week chunk at `quarterhour` and the same week at `hour` resolution (2025-08-31
 - PV: zero between 22:00 and 04:00; peak 6.42 kW (8 kWp system) at 13:45 local; monthly kWh Oct..Sep: 357, 312, 184, 183, 300, 640, 807, 932, 1041, 1100, 1017, 728. November is higher than December and January because individual real days from 2015-2018 are copied, so weather noise is part of the shape.
 - Heat pump: peak 2.81 kW electric against the 6 kW limit; 51% of the electricity falls in Dec-Feb and 6% in Jun-Aug; the baseline equals heat/COP at every quarter-hour (no carry-over).
 - 103 tests (31 new for Phase 3: context, base load, EV windows/DST/weekend/cap, heat pump energy and cap, PV, `align_to_year`, `dim_household`, plus one test against the real gold data that is skipped when the data is absent), ruff clean.
+
+## Phase 4 (tariffs and billing, unshifted) notes, 2026-10-24
+
+### 24. Type-A sanity gate: PASS, 1.42%
+`uv run ets baseline` bills every household x eligible tariff variant without any shifting. **Household A_standard on the dynamic tariff costs 1,283.58 EUR/year against 1,302.06 EUR on the fixed tariff: a saving of 1.42%** (gate -2% to +5%, literature about 1-3%). This agrees with the estimate made from the raw prices before any billing code existed (#13: 1.42%, dynamic 1,283.55 EUR; the 0.03 EUR difference is the October repeated-hour split in the gold load profile). The fixed bill is exactly 3,500 kWh x 37.2018 ct = 1,302.06 EUR.
+
+Unshifted annual bills (EUR, saving vs the household's fixed tariff):
+
+| Household | fixed | dynamic | + Module 1 | + Module 2 | + Module 3 | + Module 1 and 3 |
+|---|---|---|---|---|---|---|
+| A_standard | 1302.06 | 1283.58 (1.42%) | n/a | n/a | n/a | n/a |
+| B_ev | 2250.71 | 2246.79 (0.17%) | 2082.63 (7.47%) | 2075.10 (7.80%) | 2246.79 (0.17%) | 2082.63 (7.47%) |
+| C_heat_pump | 3197.72 | 3018.15 (5.62%) | 2853.99 (10.75%) | 2675.06 (16.34%) | 3005.71 (6.00%) | 2841.55 (11.14%) |
+| D_full | 2781.26 | 2766.81 (0.52%) | 2602.65 (6.42%) | 2328.89 (16.26%) | 2804.77 (-0.85%) | 2640.61 (5.06%) |
+
+These are the starting points for Phase 5; the plan's claim that types B and C gain more than A only after shifting is not tested here. Verified relations on the real data (tests): Module 1 is exactly 164.16 EUR (137.95 x 1.19) below plain dynamic for every household; Module 2 saves 5,096 kWh x 9.43 x 0.6 x 1.19 = 343 EUR for the heat pump; the fixed bill is kWh x price.
+
+### 25. Findings that look odd but are correct
+- **B_ev: Module 3 = plain dynamic, to the cent.** The unshifted EV charges at full power from 18:00 and is done after about 2.5 quarter-hours, always inside the 17:00-19:00 standard window (100% of EV energy), whose fee equals the base fee. Module 3 only pays once charging is moved into the low windows (01:30-04:30, 10:00-17:00): that is Phase 5.
+- **C_heat_pump: Module 3 gains about 12 EUR.** Its energy falls 37% in the low, 42% in the standard and 21% in the high window; weighted fee 9.23 ct against 9.43 ct.
+- **D_full: Module 3 is 38 EUR worse than plain dynamic.** PV covers the base load first and the heat pump's midday (low-window) demand, so the device energy still imported is 17% low, 67% standard, 16% high: weighted fee 9.92 ct (+0.49 ct x 1.19 x 6,504 kWh = 38 EUR).
+- **Dynamic saves 5.6% for the heat pump but 1.4% for A.** The energy line saving (about 3.4 ct/kWh) applies to every kWh, while the fixed fees (supplier base fee 71.88 EUR, meter share 30 or 50 EUR) are the same per household; the heat pump has 2.5x the consumption, so the fees weigh less. The saving from "timing" proper (choosing cheap hours) is still zero here: this is the price of the tariff switch alone.
+
+### 26. Modelling choices in Phase 4 and what is not modelled
+- **Module variants only for households with a controllable device** (EV or heat pump): A_standard gets `fixed` and `dynamic` only. A household without a device cannot take a §14a module.
+- **Reductions apply to device energy only; the base load always pays the standard grid fee** (the Preisblatt's modules cover "separat gemessene" device meters). PV covers the base load first, then the device; exports earn the household's feed-in rate (7.78 ct for D) under every tariff, including the fixed one.
+- **Annual bill** = energy cost + 12 x 5.99 EUR (dynamic only) + the household's smart-meter share (dynamic only) - Module 1 credit (gross, 164.16 EUR). The fixed tariff has no fees; they are inside its all-in price.
+- **Not modelled: the operator's grid base price.** The Preisblatt lists 80 EUR/year (net) for the metering point under Module 1 and Module 3 and 0 EUR under Module 2. The plan has no grid base price; it is assumed identical for all variants and inside the benchmark. **If the separately measured device under Module 3 carries its own 80 EUR (95.20 EUR gross) metering-point price, Module 3 and Module 1+3 would be 95 EUR worse than shown, which would make B's Module 3 about 4% worse than plain dynamic.** Modules 1 and 2 would be unaffected. To be confirmed with the operator before quoting Module 3 results.
+- **Not modelled:** the Preisblatt clause that the total grid charge of a metering point cannot fall below 0 EUR after the Module 1 reduction (never close to binding here), the heat-pump-specific concession fee, the 2026 negative-price rules for small PV (feed-in is paid at all prices), and dimming events.
+- 134 tests (39 new: hand-calculated four-quarter-hour bill, fixed bill = kWh x price, negative spot behaviour, Module 2 = 40%, Module 3 windows on DST days, Module 1 credit, PV flows, feed-in, meter fees, eligibility, and eight tests on the real data including the gate). Ruff clean.

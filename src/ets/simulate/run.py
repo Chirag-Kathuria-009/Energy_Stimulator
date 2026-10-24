@@ -1,6 +1,7 @@
-"""Phase 3 stage of `ets simulate`: build the households and record their totals.
+"""The household / billing stages of `ets simulate`.
 
-Phases 4 and 5 (billing, shifting, scenario runner) extend this module.
+Phase 3: build the households. Phase 4: bill them unshifted. Phase 5 adds shifting and the
+scenario runner here.
 """
 
 import json
@@ -8,9 +9,16 @@ import json
 import duckdb
 
 from ets.config import AppConfig
-from ets.domain import Household
+from ets.domain import Household, SimResult, TariffVariant
 from ets.profiles.archetypes import build_household, household_totals
 from ets.simulate.context import GoldContext
+from ets.tariffs.billing import (
+    bill,
+    build_variants,
+    grid_flows,
+    variant_prices,
+    variants_for,
+)
 
 
 def build_households(cfg: AppConfig, ctx: GoldContext) -> list[Household]:
@@ -48,3 +56,37 @@ def write_dim_household(
         "annual_base_kwh double, ev_kwh double, hp_kwh double, pv_kwh double, params_json varchar)"
     )
     con.executemany("insert into dim_household values (?, ?, ?, ?, ?, ?, ?)", rows)
+
+
+def simulate_unshifted(
+    hh: Household, variant: TariffVariant, ctx: GoldContext, cfg: AppConfig
+) -> SimResult:
+    """Bill the household as it is (EV charges on arrival, heat pump follows demand)."""
+    device = hh.ev_baseline_kwh + hh.hp_baseline_kwh
+    prices = variant_prices(variant, ctx, cfg)
+    cost_ct, annual_eur = bill(hh, device, prices, variant, cfg)
+    import_base, import_device, _ = grid_flows(hh.base_kwh, device, hh.pv_kwh)
+    return SimResult(
+        household_id=hh.id,
+        variant_id=variant.id,
+        method="none",
+        grid_import_kwh=import_base + import_device,
+        cost_ct=cost_ct,
+        annual_eur=annual_eur,
+        shifted_kwh=0.0,
+        shortfall_kwh=0.0,
+    )
+
+
+def run_baseline(cfg: AppConfig, ctx: GoldContext, households: list[Household]) -> list[SimResult]:
+    """Unshifted results for every household x eligible tariff variant."""
+    variants = build_variants(cfg)
+    return [
+        simulate_unshifted(hh, v, ctx, cfg) for hh in households for v in variants_for(hh, variants)
+    ]
+
+
+def saving_vs_fixed_pct(results: list[SimResult], household_id: str, variant_id: str) -> float:
+    """(cost_fixed - cost_variant) / cost_fixed in percent, for one household."""
+    cost = {r.variant_id: r.annual_eur for r in results if r.household_id == household_id}
+    return (cost["fixed"] - cost[variant_id]) / cost["fixed"] * 100.0

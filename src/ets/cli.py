@@ -146,6 +146,44 @@ def households() -> None:
 
 
 @app.command()
+def baseline() -> None:
+    """Bill the unshifted households under every tariff and run the type-A gate (Phase 4)."""
+    import duckdb
+
+    from ets.settings import GOLD_DB
+    from ets.simulate.context import load_gold_context
+    from ets.simulate.run import build_households, run_baseline, saving_vs_fixed_pct
+
+    gate_low, gate_high = -2.0, 5.0  # type A dynamic saving must lie in this window (percent)
+    try:
+        cfg = load_config()
+    except (ValidationError, FileNotFoundError, ValueError) as e:
+        typer.echo(f"Config invalid:\n{e}", err=True)
+        raise typer.Exit(1) from e
+    if not GOLD_DB.exists():
+        typer.echo(f"{GOLD_DB} missing: run `ets transform` first.", err=True)
+        raise typer.Exit(1)
+    con = duckdb.connect(str(GOLD_DB), read_only=True)
+    try:
+        ctx = load_gold_context(con)
+    finally:
+        con.close()
+    results = run_baseline(cfg, ctx, build_households(cfg, ctx))
+    typer.echo(f"{'household':12} {'variant':14} {'EUR/year':>9} {'vs fixed':>9}")
+    for r in results:
+        pct = saving_vs_fixed_pct(results, r.household_id, r.variant_id)
+        typer.echo(f"{r.household_id:12} {r.variant_id:14} {r.annual_eur:9.2f} {pct:8.2f}%")
+    saving_a = saving_vs_fixed_pct(results, "A_standard", "dynamic")
+    ok = gate_low <= saving_a <= gate_high
+    typer.echo(
+        f"\nType A (A_standard) dynamic vs fixed: {saving_a:.2f}% "
+        f"(gate {gate_low}% to {gate_high}%, literature about 1-3%): {'PASS' if ok else 'FAIL'}"
+    )
+    if not ok:
+        raise typer.Exit(1)
+
+
+@app.command()
 def simulate() -> None:
     """Build households, bill tariffs, shift load (Phases 3-5)."""
     _not_yet("simulate", 3)
