@@ -9,11 +9,6 @@ from ets.settings import N_QH, SIM_END, SIM_START
 app = typer.Typer(no_args_is_help=True, help="Dynamic tariff simulator (ets).")
 
 
-def _not_yet(name: str, phase: int) -> None:
-    typer.echo(f"`ets {name}` is implemented in Phase {phase}.", err=True)
-    raise typer.Exit(1)
-
-
 @app.command("check-config")
 def check_config() -> None:
     """Load and validate config/*.yaml; exit 1 on any error."""
@@ -240,17 +235,75 @@ def simulate() -> None:
 
 @app.command()
 def herding() -> None:
-    """Aggregate 1,000 households before/after shifting (Phase 6)."""
-    _not_yet("herding", 6)
+    """Aggregate a synthetic population before/after shifting and store the peak analysis."""
+    import duckdb
+
+    from ets.settings import GOLD_DB
+    from ets.simulate.herding import run_herding
+
+    try:
+        cfg = load_config()
+    except (ValidationError, FileNotFoundError, ValueError) as e:
+        typer.echo(f"Config invalid:\n{e}", err=True)
+        raise typer.Exit(1) from e
+    if not GOLD_DB.exists():
+        typer.echo(f"{GOLD_DB} missing: run `ets transform` first.", err=True)
+        raise typer.Exit(1)
+    con = duckdb.connect(str(GOLD_DB))
+    try:
+        summary = run_herding(cfg, con)
+    except (ValueError, duckdb.Error) as e:
+        typer.echo(f"Herding simulation failed: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        con.close()
+    base = summary.filter(summary["scenario"] == "unshifted")["peak_kw"][0]
+    typer.echo(f"{cfg.herding.n_households} households, seed {cfg.herding.seed}")
+    typer.echo(
+        f"{'scenario':14} {'peak kW':>9} {'vs unshifted':>12} {'peak at (local)':>17} "
+        f"{'peak/mean':>9} {'nights peak in cheapest qh':>27} {'MWh':>7}"
+    )
+    for r in summary.iter_rows(named=True):
+        typer.echo(
+            f"{r['scenario']:14} {r['peak_kw']:9.0f} {100 * (r['peak_kw'] / base - 1):+11.0f}% "
+            f"{r['peak_ts_local']:>17} {r['peak_to_mean']:9.2f} "
+            f"{100 * r['share_nights_peak_in_cheapest_qh']:26.0f}% {r['total_mwh']:7.0f}"
+        )
 
 
 @app.command("app")
 def app_() -> None:
-    """Start the Streamlit app (Phase 7)."""
-    _not_yet("app", 7)
+    """Start the Streamlit app (reads data/gold/energy.duckdb; run `ets simulate` first)."""
+    import subprocess
+    import sys
+
+    from ets.settings import ROOT
+
+    script = ROOT / "app" / "streamlit_app.py"
+    raise typer.Exit(subprocess.call([sys.executable, "-m", "streamlit", "run", str(script)]))
 
 
 @app.command()
 def refresh() -> None:
-    """Refresh the latest prices only (Phase 7)."""
-    _not_yet("refresh", 7)
+    """Fetch the newest price chunks, rebuild the price models and check them (runs daily in CI)."""
+    import subprocess
+
+    from ets.refresh import SourceFormatError
+    from ets.refresh import refresh as run_refresh
+
+    try:
+        cfg = load_config()
+        chunks, problems = run_refresh(cfg)
+    except (ValidationError, FileNotFoundError, ValueError) as e:
+        kind = "Source format changed" if isinstance(e, SourceFormatError) else "Refresh failed"
+        typer.echo(f"{kind}: {e}", err=True)
+        raise typer.Exit(1) from e
+    except subprocess.CalledProcessError as e:
+        typer.echo(f"dbt build failed (exit {e.returncode}); see output above.", err=True)
+        raise typer.Exit(1) from e
+    typer.echo(f"{len(chunks)} price chunks checked, price models rebuilt.")
+    for p in problems:
+        typer.echo(f"[gold check] {p}", err=True)
+    if problems:
+        raise typer.Exit(1)
+    typer.echo("Refresh OK.")

@@ -79,15 +79,17 @@ def _validate(name: str, df: pl.DataFrame) -> list[str]:
     return []
 
 
-def run_gold_checks(con: duckdb.DuckDBPyConnection, n: int = N_QH) -> list[str]:
-    """Validate every gold table; return a list of problems (empty means OK).
+def run_gold_checks(
+    con: duckdb.DuckDBPyConnection, n: int = N_QH, tables: tuple[str, ...] | None = None
+) -> list[str]:
+    """Validate the gold tables (all, or just `tables`); return a list of problems.
 
     Besides the schemas: all arrays must have the same length N, idx must be exactly 0..N-1 in
     order, and the profile table must hold N rows per profile.
     """
     problems: list[str] = []
     frames: dict[str, pl.DataFrame] = {}
-    for name in _SCHEMAS:
+    for name in tables or _SCHEMAS:
         try:
             frames[name] = con.sql(f"select * from {name}").pl()
         except duckdb.Error as e:

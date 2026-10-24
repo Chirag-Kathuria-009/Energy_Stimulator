@@ -1,11 +1,14 @@
-"""Constants only. Nothing here reads files or the network."""
+"""Constants. The only input is the environment, so CI and tests can point the whole pipeline at
+a small sample: ETS_DATA_DIR (where bronze/silver/gold live), ETS_SIM_START and ETS_SIM_END (the
+simulation window, ISO dates, both inclusive). Nothing here reads files or the network."""
 
+import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = ROOT / "data"
+DATA_DIR = Path(os.environ.get("ETS_DATA_DIR") or ROOT / "data").resolve()
 BRONZE = DATA_DIR / "bronze"
 SILVER = DATA_DIR / "silver"
 GOLD_DB = DATA_DIR / "gold" / "energy.duckdb"
@@ -18,8 +21,8 @@ QH_HOURS = 0.25
 # Simulation year in local time, both dates inclusive. First full year of true
 # quarter-hour day-ahead prices (SMARD repeats hourly values before 2025-10-01,
 # see DECISIONS.md item 2).
-SIM_START: date = date(2025, 10, 1)
-SIM_END: date = date(2026, 9, 30)
+SIM_START: date = date.fromisoformat(os.environ.get("ETS_SIM_START") or "2025-10-01")
+SIM_END: date = date.fromisoformat(os.environ.get("ETS_SIM_END") or "2026-09-30")
 
 _TZ = ZoneInfo(TZ_LOCAL)
 _UTC = ZoneInfo("UTC")

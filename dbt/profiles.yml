@@ -3,6 +3,7 @@ ets:
   outputs:
     dev:
       type: duckdb
-      path: ../data/gold/energy.duckdb   # relative to the dbt directory (ets transform runs there)
-      external_root: ../data/silver      # silver models are written here as Parquet
+      # ets transform exports ETS_DATA_DIR (absolute); the default is for running dbt by hand
+      path: "{{ env_var('ETS_DATA_DIR', '../data') }}/gold/energy.duckdb"
+      external_root: "{{ env_var('ETS_DATA_DIR', '../data') }}/silver"  # silver Parquet files
       threads: 4

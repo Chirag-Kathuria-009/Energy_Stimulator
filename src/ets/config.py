@@ -132,8 +132,7 @@ class Module3Cfg(_Strict):
                 for q in _parse_window(w):
                     if q in seen:
                         raise ValueError(
-                            f"Module 3 windows overlap at quarter-hour {q} "
-                            f"({seen[q]} and {name})"
+                            f"Module 3 windows overlap at quarter-hour {q} ({seen[q]} and {name})"
                         )
                     seen[q] = name
         missing = sorted(set(range(QH_PER_DAY)) - set(seen))
@@ -213,12 +212,39 @@ class SourcesCfg(_Strict):
     bdew_download_url: str
 
 
+class NormalCfg(_Strict):
+    """A normal distribution clipped to [min, max]."""
+
+    mean: float
+    sd: Annotated[float, Field(ge=0)]
+    min: float
+    max: float
+
+    @model_validator(mode="after")
+    def _ordered(self):
+        if not self.min <= self.mean <= self.max:
+            raise ValueError(f"need min <= mean <= max, got {self.min}, {self.mean}, {self.max}")
+        return self
+
+
+class HerdingCfg(_Strict):
+    n_households: Annotated[int, Field(ge=1, le=100_000)]
+    seed: int
+    p_ev: Annotated[float, Field(ge=0, le=1)]
+    p_hp: Annotated[float, Field(ge=0, le=1)]
+    annual_kwh: NormalCfg
+    ev_km: NormalCfg
+    plug_in_jitter_min: Annotated[int, Field(ge=0, le=240)]
+    spread_k: Annotated[int, Field(ge=1, le=96)]
+
+
 class AppConfig(_Strict):
     price_components: PriceComponents
     tariffs: TariffsCfg
     grid_14a: Grid14aCfg
     households: list[HouseholdCfg] = Field(min_length=1)
     sources: SourcesCfg
+    herding: HerdingCfg
 
     @model_validator(mode="after")
     def _unique_household_ids(self):
@@ -238,6 +264,7 @@ _FILES = {
     "grid_14a": "grid_14a.yaml",
     "households": "households.yaml",
     "sources": "sources.yaml",
+    "herding": "herding.yaml",
 }
 
 

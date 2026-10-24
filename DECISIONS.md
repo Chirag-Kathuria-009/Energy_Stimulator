@@ -256,3 +256,32 @@ Timing savings on plain dynamic (EUR, shifted kWh): B 131.4 (2,062 kWh, greedy a
 - Shifted energy is a measure of timing change (sum of |shifted - baseline| / 2), including the heat pump's repeated cycling of the small buffer (61% of its electricity moves with the LP); it is not "kWh moved from evening to night".
 - Because the optimisers know prices perfectly and ignore real-world frictions, the savings are an upper bound for what a household could achieve.
 - 178 tests (44 new: 18 on the optimisers incl. hand-calculated cases, constraint checks and LP <= greedy on random days; 22 on shifting, scenarios, result tables, failure and rollback; 4 on the real data). Ruff clean.
+
+## Phase 6 (herding) notes, 2026-10-25
+
+### 31. What was built, and where it differs from the plan
+- **New config `config/herding.yaml`** (the plan says "all parameters from config"): 1,000 households, seed 42, 30% EV, 20% heat pump, base load ~ normal(3,500, 800) clipped to 1,500-7,000 kWh, EV km ~ normal(15,000, 4,000) clipped to 3,000-40,000, plug-in time +/- 60 minutes (uniform, rounded to quarter-hours), spread k = 16. Validated by `HerdingCfg` (probabilities in [0, 1], min <= mean <= max). **All of these are assumptions, not measured data.** EV and heat-pump households are copies of the first EV and first heat pump in `households.yaml` (wallbox 11 kW, plug-out 07:00; heat pump 6 kW, 10 kWh buffer); no household in the sample has PV.
+- **Reproducibility:** all random numbers are drawn up front with fixed array sizes, so one seed gives one population whatever the probabilities are (changing `p_ev` adds or removes EVs but does not change anybody's base load); the spread scenario uses one random generator per household seeded with (seed, index).
+- **One pass for all scenarios:** `aggregate_scenarios` builds each household once and adds its net load (base + device - PV) to a running total for each method; the heat-pump solve is shared by the greedy and spread scenarios. `aggregate(cfgs, ctx, cfg, method, variant)` keeps the plan's signature for one method. The full run (1,000 households, three scenarios) takes about 34 s. Only three arrays of 35,040 values are held in memory.
+- **Scenarios:** `unshifted`, `greedy` (everybody shifts to the cheapest quarter-hours of the dynamic tariff without module, so all households see the same price) and `greedy_spread`. The mitigation (`shift_ev_spread`) lets each EV charge in random order among its k cheapest quarter-hours; it considers at least as many slots as the energy needs. Only the EVs are spread; the heat pumps use the greedy rule in both shifted scenarios.
+- **`peak_report`** returns a Polars DataFrame (pandas is not a dependency). `herding_summary` has one extra column, `total_mwh`. "Night" for the share is the 18:00-07:00 window of the EV plug-in; the share is the fraction of nights in which the highest load of the night falls in the cheapest quarter-hour of that night (ties: earlier).
+- Tables `herding_curve(scenario, idx, kw)` and `herding_summary` are replaced in one transaction; a failing write rolls back and keeps the old tables.
+
+### 32. Results (1,000 households, seed 42, dynamic tariff without module)
+| Scenario | Peak kW | Peak at (local) | Peak / mean | Nights with the peak in the cheapest quarter-hour | Energy MWh |
+|---|---|---|---|---|---|
+| unshifted | 2,423 | 2025-12-28 18:15 | 4.01 | 0% | 5,299 |
+| greedy | **4,947 (+104%)** | 2026-01-01 23:15 | 8.21 | **74%** | 5,281 |
+| greedy_spread (k = 16) | 2,433 (+0%) | 2025-12-25 20:45 | 4.04 | 19% | 5,281 |
+
+- **Herding is real in this model:** when all households follow the same price, the peak doubles and moves from the early evening to the cheapest night quarter-hour; in three quarters of all nights the highest load of the night is exactly there.
+- **Energy:** 5,299 MWh unshifted against 5,281 MWh shifted (-0.34%). The EV energy is exactly conserved; the difference is the heat pumps using slightly less electricity in better-COP quarter-hours (#29). The test with EVs only shows exact equality.
+- **Sensitivity to k** (peak kW; unshifted 2,423, greedy 4,947): k = 4: 3,931; k = 8: 2,895; k = 16: 2,433; k = 32: 2,101; k = 64: 2,057. From k about 16 the mitigation removes the herding peak; k = 32 even goes about 13% below today's peak, because the EVs then also leave the early-evening peak.
+- **What the mitigation costs the household:** for the EV of household B (device price, EUR/year): unshifted 943.2, greedy 811.9 (saves 131.4), spread k = 8: 827.8, k = 16: 837.5, k = 32: 858.2, k = 64: 911.2 (mean of ten seeds). At k = 16 an EV gives up 25.6 EUR a year, 19% of its greedy saving; k = 32 costs 35%, k = 64 76%.
+- **Partial adoption** (estimate: blend of the stored curves, assuming the adopters are a random subset): the system peak is below today's up to about 25% of households following the price (-14% at 25%), because shifting first removes load from the evening peak; it exceeds today's peak from about 40% adoption (+18% at 50%, +60% at 75%, +104% at 100%). With the spread mitigation the peak stays at or below today's level at every adoption rate (1,955-2,433 kW from 50% to 100%). The plan notes that only 5.9% of metering points had a smart meter in mid-2026, so the 100% case is a long-term worst case.
+
+### 33. Limits
+- A synthetic, seeded population; no feeder or transformer topology, no grid limits (the peak is the sum over 1,000 households, about 2.4 kW per household unshifted, which a real low-voltage feeder with fewer households would see with much higher variance).
+- Every household follows exactly the same price with the same rule and perfect foresight: this is the worst case for herding. Different suppliers, tariffs, EV chargers with their own smart charging, or randomised start times would soften it; that is what the spread scenario stands in for.
+- The result depends on the 2025/26 price shape (cheap quarter-hours cluster around night and midday) and on the assumed shares of EV and heat-pump households; both are inputs, not findings.
+- 198 tests (20 new: sampling, spread optimiser, reproducibility, energy conservation, herding peak and its removal, peak report formulas, table writes and rollback, configuration validation, and one on the real data). Ruff clean.

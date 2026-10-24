@@ -1,0 +1,10 @@
+# Phase 6: what happens to the grid when many households follow the same price.
+# All values are ASSUMPTIONS (DECISIONS.md #31); none are measured data.
+n_households: 1000
+seed: 42                 # same seed -> identical households and identical curves
+p_ev: 0.30               # share of households with an EV (copy of the first EV in households.yaml)
+p_hp: 0.20               # share with a heat pump (copy of the first heat pump)
+annual_kwh: {mean: 3500, sd: 800, min: 1500, max: 7000}   # base load, normal, clipped
+ev_km: {mean: 15000, sd: 4000, min: 3000, max: 40000}     # km per year, normal, clipped
+plug_in_jitter_min: 60   # plug-in time = template +/- this many minutes (uniform, quarter-hours)
+spread_k: 16             # mitigation: each EV picks randomly among its 16 cheapest quarter-hours (4 h)

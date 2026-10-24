@@ -103,3 +103,31 @@ def shift_hp_greedy(
         else:
             out[a:b] = thermal / cop[a:b]
     return out
+
+
+def shift_ev_spread(
+    price_ct: np.ndarray, sessions: list[Session], k: int, rng: np.random.Generator
+) -> tuple[np.ndarray, float]:
+    """Herding mitigation: charge in random order among the k cheapest quarter-hours of the
+    window instead of strictly cheapest-first, so many households do not pick the same slot.
+
+    At least as many slots as the energy needs are always considered, so the session is served
+    whenever the window allows it; the cost is slightly above the greedy cost.
+    """
+    out = np.zeros(len(price_ct))
+    shortfall = 0.0
+    for s in sessions:
+        step = s.p_max_kw * QH_HOURS
+        slots = np.arange(s.start_idx, s.end_idx)
+        order = slots[np.lexsort((slots, price_ct[slots]))]
+        needed = int(np.ceil(s.energy_kwh / step - _EPS))
+        pool = rng.permutation(order[: max(k, needed)])
+        remaining = s.energy_kwh
+        for slot in pool:
+            if remaining <= _EPS:
+                break
+            energy = min(step, remaining)
+            out[slot] += energy
+            remaining -= energy
+        shortfall += max(remaining, 0.0)
+    return out, shortfall

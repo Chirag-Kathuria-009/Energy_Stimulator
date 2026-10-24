@@ -1,6 +1,7 @@
 """Phase 2b runner: staging, dbt build, gold checks. dbt gets its parameters from config."""
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -46,8 +47,17 @@ def dbt_vars(cfg: AppConfig) -> dict:
 
 
 def stage_bdew() -> Path:
-    (entry,) = manifest.entries("bdew")
-    return write_bdew_long_csv(BRONZE / entry["path"], STAGING / "bdew_profiles_long.csv")
+    """Convert the bronze BDEW workbook to the long CSV that dbt reads. Without a bronze entry
+    (the small CI sample ships the CSV directly) an existing staging file is used as it is."""
+    target = STAGING / "bdew_profiles_long.csv"
+    entries = manifest.entries("bdew")
+    if entries:
+        return write_bdew_long_csv(BRONZE / entries[0]["path"], target)
+    if target.exists():
+        return target
+    raise FileNotFoundError(
+        "no BDEW workbook in the manifest and no staged profile CSV: run `ets ingest`"
+    )
 
 
 def run_dbt(cfg: AppConfig, command: str = "build", extra: list[str] | None = None) -> None:
@@ -64,7 +74,8 @@ def run_dbt(cfg: AppConfig, command: str = "build", extra: list[str] | None = No
         "--vars", json.dumps(dbt_vars(cfg)),
         *(extra or []),
     ]  # fmt: skip
-    subprocess.run(args, check=True, cwd=DBT_DIR)
+    env = {**os.environ, "ETS_DATA_DIR": str(DATA_DIR)}  # absolute: dbt runs in the dbt directory
+    subprocess.run(args, check=True, cwd=DBT_DIR, env=env)
 
 
 def transform(cfg: AppConfig) -> list[str]:
