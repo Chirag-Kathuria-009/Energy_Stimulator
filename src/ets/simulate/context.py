@@ -39,6 +39,12 @@ class GoldContext:
         minutes = delta / np.timedelta64(1, "m")
         return int(minutes // 15)
 
+    def day_slices(self) -> list[tuple[int, int]]:
+        """(start, end) array positions of every local day; DST days have 92 or 100 slots."""
+        change = np.flatnonzero(self.date_local[1:] != self.date_local[:-1]) + 1
+        edges = [0, *change.tolist(), self.n]
+        return list(zip(edges[:-1], edges[1:], strict=True))
+
     def dates(self) -> list[date]:
         """Distinct local dates of the simulation year in order."""
         return [d.astype("datetime64[D]").item() for d in np.unique(self.date_local)]

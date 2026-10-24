@@ -185,8 +185,57 @@ def baseline() -> None:
 
 @app.command()
 def simulate() -> None:
-    """Build households, bill tariffs, shift load (Phases 3-5)."""
-    _not_yet("simulate", 3)
+    """Build households, bill every tariff, shift the load (greedy, LP) and store the results."""
+    import duckdb
+
+    from ets.settings import GOLD_DB
+    from ets.simulate.run import run_scenarios
+
+    try:
+        cfg = load_config()
+    except (ValidationError, FileNotFoundError, ValueError) as e:
+        typer.echo(f"Config invalid:\n{e}", err=True)
+        raise typer.Exit(1) from e
+    if not GOLD_DB.exists():
+        typer.echo(f"{GOLD_DB} missing: run `ets transform` first.", err=True)
+        raise typer.Exit(1)
+    con = duckdb.connect(str(GOLD_DB))
+    try:
+        run_id = run_scenarios(cfg, con)
+        rows = con.sql(
+            "select s.household_id, s.variant_id, s.method, s.annual_eur, s.saving_vs_fixed_eur, "
+            "100 * s.saving_vs_fixed_eur / f.annual_eur as pct, s.saving_tariff_switch_eur, "
+            "s.saving_timing_eur, s.saving_gridfee_eur, s.shifted_kwh "
+            "from sim_summary s join sim_summary f on f.run_id = s.run_id and f.variant_id = "
+            "'fixed' and f.household_id = s.household_id and f.method = 'none' "
+            "where s.run_id = ? order by 1, 2, 3",
+            params=[run_id],
+        ).fetchall()
+    except (ValueError, duckdb.Error) as e:
+        typer.echo(f"Simulation failed: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        con.close()
+    typer.echo(
+        f"{'household':12} {'variant':14} {'method':7} {'EUR/yr':>8} {'saving':>8} {'%':>6} "
+        f"{'switch':>7} {'timing':>7} {'gridfee':>8} {'shifted kWh':>11}"
+    )
+    for hid, vid, m, eur, sav, pct, sw, tm, gf, sh in rows:
+        typer.echo(
+            f"{hid:12} {vid:14} {m:7} {eur:8.2f} {sav:8.2f} {pct:6.2f} {sw:7.2f} {tm:7.2f} "
+            f"{gf:8.2f} {sh:11.0f}"
+        )
+    pct = {(h, v, m): p for h, v, m, _, _, p, *_ in rows}
+    a = pct[("A_standard", "dynamic", "none")]
+    b, c = pct[("B_ev", "dynamic", "lp")], pct[("C_heat_pump", "dynamic", "lp")]
+    ok_a, ok_bc = -2.0 <= a <= 5.0, b > a and c > a
+    typer.echo(
+        f"\nGate: type A dynamic {a:.2f}% ({'ok' if ok_a else 'OUT OF RANGE'}); "
+        f"B dynamic+LP {b:.2f}% and C {c:.2f}% must exceed A: {'PASS' if ok_bc else 'FAIL'}"
+    )
+    typer.echo(f"run_id {run_id}")
+    if not (ok_a and ok_bc):
+        raise typer.Exit(1)
 
 
 @app.command()

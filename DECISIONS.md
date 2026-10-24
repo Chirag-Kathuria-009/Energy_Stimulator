@@ -204,3 +204,55 @@ These are the starting points for Phase 5; the plan's claim that types B and C g
 - **Not modelled: the operator's grid base price.** The Preisblatt lists 80 EUR/year (net) for the metering point under Module 1 and Module 3 and 0 EUR under Module 2. The plan has no grid base price; it is assumed identical for all variants and inside the benchmark. **If the separately measured device under Module 3 carries its own 80 EUR (95.20 EUR gross) metering-point price, Module 3 and Module 1+3 would be 95 EUR worse than shown, which would make B's Module 3 about 4% worse than plain dynamic.** Modules 1 and 2 would be unaffected. To be confirmed with the operator before quoting Module 3 results.
 - **Not modelled:** the Preisblatt clause that the total grid charge of a metering point cannot fall below 0 EUR after the Module 1 reduction (never close to binding here), the heat-pump-specific concession fee, the 2026 negative-price rules for small PV (feed-in is paid at all prices), and dimming events.
 - 134 tests (39 new: hand-calculated four-quarter-hour bill, fixed bill = kWh x price, negative spot behaviour, Module 2 = 40%, Module 3 windows on DST days, Module 1 credit, PV flows, feed-in, meter fees, eligibility, and eight tests on the real data including the gate). Ruff clean.
+
+## Phase 5 (shifting and scenarios) notes, 2026-10-24
+
+### 27. What was built, and where it differs from the plan
+- **PuLP 4.0.1 has a new API** (Rust core): variables come from `prob.add_variable(name, low, up)`, `LpVariable(...)` can no longer be constructed directly, and `prob.solve(pulp.HiGHS(msg=False))` returns a stats object (`.status`, `.has_solution`) instead of an integer; `pulp.LpStatus` is gone. The LP module is written for this API. One session LP takes about 2 ms and one heat-pump day about 7 ms, so a full run is fast.
+- **Function signatures:** `apply_shifting(hh, prices, method, ctx, cache)` and `simulate_one(hh, variant, method, ctx, cfg, cache)` take the context (heat-pump days need the local calendar) and an optional cache. `shift_hp_greedy` / `shift_hp_lp` take `days` (list of day slices from `GoldContext.day_slices()`, 92/96/100 slots) instead of the context. The cache is keyed by household, device, method and a hash of the device price array, so variants with identical device prices (dynamic and dynamic_m1; dynamic_m3 and dynamic_m1_m3) share one solve.
+- **Heat pump model** (greedy and LP identical constraints): per local day, thermal buffer 10 kWh starting and ending at half full, electricity per quarter-hour at most 6 kW x 0.25, `level[t] = level[t-1] + electricity x COP - heat`, level within [0, buffer]. Planned one day at a time with the day-ahead price, as a controller would.
+- **Greedy heat pump rule** (the plan only sketched it): a backward pass gives the level the buffer must have after each slot to still finish the day at the start level (`floor`); a ceiling keeps it from ending above that level; between floor and cap it charges to the cap when the slot's price per unit of heat (price / COP) is at most that of every slot within reach of a full buffer (the window where cumulative future demand reaches the buffer size), otherwise it only does the minimum. A day that cannot be served within the power limit runs just in time at the limit and is logged (never happens with the configured values).
+- **EV:** per session, cheapest quarter-hours first (ties: earlier slot) for greedy; one small LP per session for the LP (a window that is too short falls back to greedy and counts as shortfall). Both give the same cost, as expected for this problem.
+- **`sim_results_qh` has an extra column `device_kwh`** (EV + heat pump electricity after shifting) so the app (Phase 7) can draw device load before and after shifting; grid import alone cannot show it. `SimResult` got an optional `device_kwh` field.
+- **Run bookkeeping:** `sim_runs` records config hash and git commit (with `+dirty` if the tree had uncommitted changes); results and summary are written in one transaction (a failure rolls back, marks the run `failed`, leaves the older results untouched); per-quarter-hour rows of runs older than the newest two are deleted (about 30 MB per run), summaries and run records are kept. `v_latest_summary` shows the newest `ok` run. The summary is computed in Python from the results in memory (not by a second pass over 1.75 million rows) and checked against SQL in the tests.
+- **Savings split** (three parts that add up to the saving vs fixed, per row): tariff switch = fixed - dynamic unshifted; timing = dynamic unshifted - dynamic with the row's method; grid fee = dynamic with the method - this variant with the method. The grid-fee part also contains the extra timing gain from shifting into module-specific cheap windows, which cannot be separated.
+- **Commands:** `ets simulate` replaces its stub and prints the table and the gate; `ets households` and `ets baseline` stay as separate checks. `ets simulate` takes about 31 s.
+
+### 28. Results (annual bill in EUR, saving vs the household's fixed tariff)
+Gate: type A unchanged at 1.42%; B (dynamic, LP) 6.01% and C 11.66% both exceed it: PASS. No EV energy was left undelivered (total shortfall 0).
+
+| Household | Variant | unshifted | greedy | LP |
+|---|---|---|---|---|
+| A_standard | dynamic | 1284 (1.4%) | n/a | n/a |
+| B_ev | dynamic | 2247 (0.2%) | 2115 (6.0%) | 2115 (6.0%) |
+| B_ev | dynamic_m1 | 2083 (7.5%) | 1951 (13.3%) | 1951 (13.3%) |
+| B_ev | dynamic_m2 | 2075 (7.8%) | 1944 (13.6%) | 1944 (13.6%) |
+| B_ev | dynamic_m3 | 2247 (0.2%) | 1966 (12.7%) | 1966 (12.7%) |
+| B_ev | dynamic_m1_m3 | 2083 (7.5%) | 1802 (19.9%) | 1802 (19.9%) |
+| C_heat_pump | dynamic | 3018 (5.6%) | 2839 (11.2%) | 2825 (11.7%) |
+| C_heat_pump | dynamic_m1 | 2854 (10.7%) | 2675 (16.3%) | 2661 (16.8%) |
+| C_heat_pump | dynamic_m2 | 2675 (16.3%) | 2503 (21.7%) | 2488 (22.2%) |
+| C_heat_pump | dynamic_m3 | 3006 (6.0%) | 2644 (17.3%) | 2612 (18.3%) |
+| C_heat_pump | dynamic_m1_m3 | 2842 (11.1%) | 2480 (22.4%) | 2448 (23.4%) |
+| D_full | dynamic | 2767 (0.5%) | 2474 (11.0%) | 2486 (10.6%) |
+| D_full | dynamic_m1 | 2603 (6.4%) | 2310 (16.9%) | 2322 (16.5%) |
+| D_full | dynamic_m2 | 2329 (16.3%) | 2048 (26.4%) | 2055 (26.1%) |
+| D_full | dynamic_m3 | 2805 (-0.8%) | 2201 (20.9%) | 2196 (21.1%) |
+| D_full | dynamic_m1_m3 | 2641 (5.1%) | 2037 (26.8%) | 2032 (27.0%) |
+
+Timing savings on plain dynamic (EUR, shifted kWh): B 131.4 (2,062 kWh, greedy and LP identical), C greedy 178.7 (2,388) and LP 193.3 (3,099), D greedy 292.8 (4,405) and LP 280.6 (5,113). Greedy gets 92% of the LP's timing saving for the heat pump. Module 1 + 3 is exactly Module 1 plus Module 3 (B: 164.16 + 149.55 = 313.71).
+
+### 29. Findings
+- **Tests found a flaw in my first greedy rule.** With a strict `<` (charge only when strictly cheaper than everything within reach), a run of equally cheap slots charged only at its last slot, which cannot fill the buffer: on a cheap-night/expensive-day test day greedy cost 203.8 against 198.4 for doing nothing. Changing to `<=` gives the hand-calculated optimum (198.4 - 30 = 168.4: 5 kWh of heat moved from 20 ct to 2 ct at COP 3). On flat prices the cost is unchanged.
+- **Greedy vs LP:** equal for the EV, LP better by 0.5 percentage points for the heat pump (EUR 14), as expected. The LP cost is never above the greedy cost on 20 random days with negative prices (test), and every schedule on the real data satisfies all constraints to 1e-14 (buffer within bounds, end-of-day level, daily heat delivered, power limit).
+- **Heat-pump electricity falls by about 93 kWh (1.8%) when optimised**, because the optimiser also moves load to quarter-hours with a better COP; heat delivered is conserved, electricity is not.
+- **Shifting is what makes Module 3 pay:** unshifted, Module 3 is worth 0 (B), 12 EUR (C) and -38 EUR (D); shifted into its low windows it is worth 150 (B), 213 (C) and 290 (D) EUR on top of dynamic (LP). The Module 3 base-price caveat (#26, possibly 95 EUR gross) applies in full to these numbers.
+- **D_full: the LP is worse than greedy on the bill (2,486 vs 2,474 EUR), although it is better on its own objective.** The optimisers price device energy at the grid price in every quarter-hour (as the plan specifies) and know nothing about the PV surplus that would cover the device for free (opportunity cost: the 7.78 ct feed-in). The LP moves more energy (5,113 vs 4,405 kWh) away from sunny hours and loses self-consumption. D's timing saving (281 EUR with LP) is about 44 EUR (13%) lower than the sum of B's and C's (131 + 193 = 325 EUR), which is roughly the price of being PV-blind. **D's shifting results are therefore conservative, not wrong; a PV-aware optimiser (device energy costs the feed-in rate up to the PV surplus, then the grid price) is the natural next step and is not built.**
+- **The price-spike week is not a winter week.** The 7-day window with the highest mean spot price is 10-17 September 2026 (18.7 ct/kWh vs 10.4 for the year). For a heat-pump household that week costs 39 EUR against an average week of 54 EUR, because there is hardly any heating demand. `spike_week_eur` follows the plan's definition (highest price), so it is a price-risk measure for households with flexible or constant load, not a worst-cost week; `worst_month_eur` (January for C, 413 EUR) is the better risk number for the heat pump.
+
+### 30. Limits of the Phase 5 model (ASSUMPTIONS)
+- Perfect knowledge of the day's prices; every day planned on its own; no standing losses of the heat buffer, no minimum run or off times, no comfort limits beyond the buffer bounds; electricity price = day-ahead spot plus the tariff components (no imbalance or intraday effects).
+- The EV needs the same energy every day and is always plugged in during its window; no battery state-of-charge dynamics, no vehicle-to-grid, no day-to-day flexibility (charging on a cheap Tuesday for a Wednesday).
+- Shifted energy is a measure of timing change (sum of |shifted - baseline| / 2), including the heat pump's repeated cycling of the small buffer (61% of its electricity moves with the LP); it is not "kWh moved from evening to night".
+- Because the optimisers know prices perfectly and ignore real-world frictions, the savings are an upper bound for what a household could achieve.
+- 178 tests (44 new: 18 on the optimisers incl. hand-calculated cases, constraint checks and LP <= greedy on random days; 22 on shifting, scenarios, result tables, failure and rollback; 4 on the real data). Ruff clean.

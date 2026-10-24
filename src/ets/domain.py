@@ -47,3 +47,4 @@ class SimResult:
     annual_eur: float
     shifted_kwh: float
     shortfall_kwh: float
+    device_kwh: np.ndarray | None = None  # EV + heat-pump electricity after shifting
