@@ -1,0 +1,41 @@
+name: ci
+
+# Lint, tests, and a full dbt build on the committed sample (data/sample), so CI never
+# depends on live APIs or on the 400 MB of real source data.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install (locked)
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Tests
+        run: uv run pytest -q
+
+      - name: dbt build on the sample
+        run: |
+          # The sample's simulation window is stored next to the data, in one place only.
+          echo "ETS_SIM_START=$(jq -r .start data/sample/window.json)" >> "$GITHUB_ENV"
+          echo "ETS_SIM_END=$(jq -r .end data/sample/window.json)" >> "$GITHUB_ENV"
+          echo "ETS_DATA_DIR=$RUNNER_TEMP/ets" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/ets"
+          cp -r data/sample/bronze data/sample/staging "$RUNNER_TEMP/ets/"
+
+      # dbt seed + run + test (47 checks) and the pandera gold checks, on the two-week window.
+      - name: ets transform
+        run: uv run ets transform

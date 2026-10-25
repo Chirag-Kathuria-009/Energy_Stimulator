@@ -21,3 +21,4 @@ dbt/.user.yml
 # Local planning docs (kept out of the repo on purpose)
 ENERGY_SIMULATOR_PLAN.md
 IMPLEMENTATION_PHASES.md
+HANDOFF.md

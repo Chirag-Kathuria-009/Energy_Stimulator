@@ -271,6 +271,16 @@ def herding() -> None:
         )
 
 
+@app.command("make-sample")
+def make_sample_cmd() -> None:
+    """Cut the small CI sample (data/sample) out of the real bronze data."""
+    from ets.sample import SAMPLE_DIR, make_sample
+
+    cfg = load_config()
+    counts = make_sample(cfg)
+    typer.echo(f"Wrote {SAMPLE_DIR}: " + ", ".join(f"{k}={v}" for k, v in counts.items()))
+
+
 @app.command("app")
 def app_() -> None:
     """Start the Streamlit app (reads data/gold/energy.duckdb; run `ets simulate` first)."""

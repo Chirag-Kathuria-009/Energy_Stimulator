@@ -19,6 +19,10 @@ from ets.settings import BRONZE, GOLD_DB, SIM_START_UTC
 from ets.transform import run_dbt
 
 PRICE_TABLES = ("dim_time", "fact_price_qh")
+# "cautious": run only the tests whose parents are all selected. Without it dbt also selects
+# tests that touch other gold tables (gold_row_counts, relationships to dim_time), which do not
+# exist on a fresh machine, and the build fails.
+DBT_SELECTION = ["--select", "+fact_price_qh", "--indirect-selection", "cautious"]
 
 
 class SourceFormatError(ValueError):
@@ -66,7 +70,7 @@ def refresh(
         raise SourceFormatError("SMARD returned no price chunks for the requested range")
     for chunk in chunks:
         validate_chunk(chunk)
-    run_dbt(cfg, "build", extra=["--select", "+fact_price_qh"])
+    run_dbt(cfg, "build", extra=DBT_SELECTION)
     con = duckdb.connect(str(GOLD_DB), read_only=True)
     try:
         problems = run_gold_checks(con, tables=PRICE_TABLES)
